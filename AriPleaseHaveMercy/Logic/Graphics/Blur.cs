@@ -29,12 +29,10 @@ public class Blur
         
         context.RenderTo(CurrentBuffer, (c, t) =>
         {
-            _effect.Activate();
             c.DrawTexture(SourceTexture, Vector2.Zero);
-            Shader.Deactivate();
         });   
         
-        for (var i = 0; i < Iterations - 1; i++)
+        for (var i = 0; i < Iterations; i++)
         {
             context.RenderTo(CurrentBuffer, (c, _) =>
             {

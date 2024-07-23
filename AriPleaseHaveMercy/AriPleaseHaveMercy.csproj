@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Chroma" Version="0.64.0" />
-    <PackageReference Include="Chroma.Commander" Version="1.1.0" />
+    <PackageReference Include="Chroma.Commander" Version="1.2.1" />
   </ItemGroup>
 
   <ItemGroup>

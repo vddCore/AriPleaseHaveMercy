@@ -31,9 +31,6 @@ public class Body(World world)
 
     public float Density => Mass / (4 / 3f * MathF.PI * float.Pow(Radius, 3));
 
-    public float? MaxForce { get; set; } = 0.0013f;
-    public Vector2? MaxVelocity { get; set; } = new(0.099f);
-
     public bool IsStationary { get; set; }
 
     public BodyCollisionResolver? BodyCollisionResolver { get; set; } = CollisionResolvers.FunkyBodyCollisionResolver;
@@ -50,15 +47,12 @@ public class Body(World world)
     {
         var force = gravity * (by.Mass * Mass) / MathF.Pow(by.DistanceTo(this), 2);
 
-        if (MaxForce != null)
+        if (World.MaximumForce != null)
         {
-            if (float.IsNaN(force))
-                force = 0;
-
             var sign = MathF.Sign(force);
 
-            if (force > MaxForce.Value)
-                force = sign * MaxForce.Value;
+            if (force > World.MaximumForce.Value)
+                force = sign * World.MaximumForce.Value;
         }
 
         Jolt((by.Position - Position) * force);
@@ -69,20 +63,20 @@ public class Body(World world)
 
     public void Accelerate(Vector2 vector)
     {
-        var (vx, vy) = (Velocity.X, Velocity.Y);
-        vx += vector.X;
-        vy += vector.Y;
-        
-        if (MaxVelocity != null)
+        Velocity.X += vector.X;
+        Velocity.Y += vector.Y;
+
+        if (World.MaximumBodyVelocityX != null)
         {
-            if (MathF.Abs(vx) > MaxVelocity.Value.X)
-                vx = MaxVelocity.Value.X * MathF.Sign(vx);
-
-            if (MathF.Abs(vy) > MaxVelocity.Value.Y)
-                vy = MaxVelocity.Value.Y * MathF.Sign(vy);
+            if (MathF.Abs(Velocity.X) > World.MaximumBodyVelocityX)
+                Velocity.X = World.MaximumBodyVelocityX.Value * MathF.Sign(Velocity.X);
         }
-
-        Velocity = new(vx, vy);
+        
+        if (World.MaximumBodyVelocityY != null)
+        {
+            if (MathF.Abs(Velocity.Y) > World.MaximumBodyVelocityY)
+                Velocity.Y = World.MaximumBodyVelocityY.Value * MathF.Sign(Velocity.Y);
+        }
     }
 
     public void Move(float dt)

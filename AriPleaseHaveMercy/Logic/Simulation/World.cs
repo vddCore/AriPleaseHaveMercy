@@ -3,7 +3,6 @@
 using System.Drawing;
 using System.Numerics;
 using Chroma.Graphics;
-using Color = Chroma.Graphics.Color;
 
 public class World(Size size)
 {
@@ -17,6 +16,9 @@ public class World(Size size)
     public float Gravity { get; set; } = 6.674f;
     public float BounceDamping { get; set; } = 3.25f;
     public float TimeScale { get; set; } = 1f;
+    public float? MaximumForce { get; set; } = 0.0013f;
+    public float? MaximumBodyVelocityX { get; set; } = 0.099f;
+    public float? MaximumBodyVelocityY { get; set; } = 0.099f;
 
     public event EventHandler<Body>? BodyCollidedWithWall; 
 
@@ -28,7 +30,7 @@ public class World(Size size)
         }
     }
 
-    public void Update(float delta)
+    public void FixedUpdate(float delta)
     {
         for (var i = 0; i < _bodies.Count; i++)
         {
@@ -43,18 +45,18 @@ public class World(Size size)
         for (var i = 0; i < _bodies.Count; i++)
         {
             _bodies[i].Accelerate(_bodies[i].Acceleration * TimeScale);
+            _bodies[i].Move(delta * TimeScale);
+
         }
         
         for (var i = 0; i < _bodies.Count; i++)
         {
-            _bodies[i].Move(delta * TimeScale);
-        }
-        
-        for (var i = 0; i < _bodies.Count; i++)
-        {   
             if (_bodies[i].CollidesWithWorldEdge(out var edges))
+            {
+                BodyCollidedWithWall?.Invoke(this, _bodies[i]);
                 _bodies[i].ResolveWallCollision(edges);
-            
+            }
+
             for (var j = 0; j < _bodies.Count; j++)
             {
                 if (j == i) continue;
@@ -64,35 +66,21 @@ public class World(Size size)
             }
         }
     }
-    
-    public Body CreateRandomBody()
-    {
-        var mass = Random.Shared.Next(50, 100);
-        
-        var b = new Body(this)
-        {
-            Position = new Vector2(
-                Random.Shared.Next(20, Size.Width - 20),
-                Random.Shared.Next(20, Size.Height - 20)
-            ),
-            Mass = mass,
-            Radius = mass / 7,
-            Color = new Color(
-                (byte)Random.Shared.Next(0, 255),
-                (byte)Random.Shared.Next(0, 255),
-                (byte)Random.Shared.Next(0, 255),
-                (byte)127
-            )
-        };
 
+    public Body CreateBody(Action<Body> init)
+    {
+        var b = new Body(this);
+        init(b);
         _bodies.Add(b);
         return b;
     }
 
-    public Body CreateBody()
+    public void Reset()
     {
-        var b = new Body(this);
-        _bodies.Add(b);
-        return b;
+        _bodies.Clear();
+        
+        Gravity = 6.674f;
+        BounceDamping = 3.25f;
+        TimeScale = 1f;
     }
 }
