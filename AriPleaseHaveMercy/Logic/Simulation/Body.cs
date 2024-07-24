@@ -3,13 +3,12 @@
 using System.Numerics;
 using Chroma.Graphics;
 
-
-
 public class Body(World world)
 {
     private Color _color = Color.Lime;
     
     public Vector2 Position;
+    public Vector2 PreviousPosition;
     public Vector2 Acceleration;
     public Vector2 Velocity;
     public float Radius;
@@ -112,24 +111,50 @@ public class Body(World world)
     public void ResolveBodyCollision(Body b, Vector2 collisionDepth)
         => BodyCollisionResolver?.Invoke(this, b, collisionDepth);
 
-    public void ResolveWallCollision(WorldEdge edges)
-        => WallCollisionResolver?.Invoke(this, edges);
+    public void ResolveWallCollision(Vector2 collisionPoint, WorldEdge edges)
+        => WallCollisionResolver?.Invoke(this, collisionPoint, edges);
 
-    public bool CollidesWithWorldEdge(out WorldEdge edges)
+    public bool CollidesWithWorldEdge(out Vector2 collisionPoint, out float penetration, out WorldEdge edges)
     {
         edges = WorldEdge.None;
+        collisionPoint = Vector2.Zero;
+        penetration = 0;
 
         if (Position.X - Radius <= 0)
+        {
             edges |= WorldEdge.Left;
 
+            var difference = Radius - Position.X;
+            collisionPoint = Position with { X = Position.X + difference - Radius };
+            penetration = MathF.Abs(Acceleration.X / World.BounceDamping);
+        }
+
         if (Position.Y - Radius <= 0)
+        {
             edges |= WorldEdge.Top;
 
+            var difference = Radius - Position.Y;
+            collisionPoint = Position with { Y = Position.Y + difference - Radius };
+            penetration = MathF.Abs(Acceleration.Y / World.BounceDamping);
+        }
+
         if (Position.X + Radius >= World.Size.Width)
+        {
             edges |= WorldEdge.Right;
 
+            var difference = Position.X + Radius - World.Size.Width;
+            collisionPoint = Position with { X = Position.X - difference + Radius };
+            penetration = MathF.Abs(Acceleration.X / World.BounceDamping);
+        }
+
         if (Position.Y + Radius >= World.Size.Height)
+        {
             edges |= WorldEdge.Bottom;
+            
+            var difference = Position.Y + Radius - World.Size.Height;
+            collisionPoint = Position with { Y = Position.Y - difference + Radius };
+            penetration = MathF.Abs(Acceleration.Y / World.BounceDamping);
+        }
 
         return edges != WorldEdge.None;
     }

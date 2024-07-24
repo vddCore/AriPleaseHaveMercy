@@ -14,13 +14,14 @@ public class World(Size size)
     public IReadOnlyList<Body> Bodies => _bodies;
 
     public float Gravity { get; set; } = 6.674f;
-    public float BounceDamping { get; set; } = 3.25f;
+    public float BounceDamping { get; set; } = 2.25f;
     public float TimeScale { get; set; } = 1f;
-    public float? MaximumForce { get; set; } = 0.0013f;
-    public float? MaximumBodyVelocityX { get; set; } = 0.099f;
-    public float? MaximumBodyVelocityY { get; set; } = 0.099f;
+    public float? MaximumForce { get; set; } = 0.0753f;
+    public float? MaximumBodyVelocityX { get; set; } = 0.199f;
+    public float? MaximumBodyVelocityY { get; set; } = 0.199f;
+    public bool IsCollisionDetectionEnabled { get; set; } = true;
 
-    public event EventHandler<Body>? BodyCollidedWithWall; 
+    public event EventHandler<WallCollisionEventArgs>? BodyCollidedWithWall; 
 
     public void Draw(RenderContext context)
     {
@@ -30,41 +31,41 @@ public class World(Size size)
         }
     }
 
-    public void FixedUpdate(float delta)
+    public void Update(float delta)
     {
-        for (var i = 0; i < _bodies.Count; i++)
+        var count = _bodies.Count;
+
+        Parallel.For(0, count, i =>
         {
-            for (var j = 0; j < _bodies.Count; j++)
+            var bodyA = _bodies[i];
+            
+            if (bodyA.CollidesWithWorldEdge(out var collisionPoint, out var penetration, out var edges))
+            {
+                BodyCollidedWithWall?.Invoke(this, new WallCollisionEventArgs(bodyA, edges, penetration, collisionPoint));
+                bodyA.ResolveWallCollision(collisionPoint, edges);
+            }
+            
+            for (var j = 0; j < count; j++)
             {
                 if (j == i) continue;
+
+                var bodyB = _bodies[j];
+                bodyB.Affect(bodyA, Gravity);
                 
-                _bodies[j].Affect(_bodies[i], Gravity * TimeScale);
-            }    
-        }
-        
-        for (var i = 0; i < _bodies.Count; i++)
+                if (bodyB.CollidesWith(bodyA, out var depth))
+                    bodyB.ResolveBodyCollision(bodyA, depth);
+            }
+        });
+
+        Parallel.For(0, count, i =>
         {
             _bodies[i].Accelerate(_bodies[i].Acceleration * TimeScale);
-            _bodies[i].Move(delta * TimeScale);
+        });
 
-        }
-        
-        for (var i = 0; i < _bodies.Count; i++)
+        Parallel.For(0, count, i =>
         {
-            if (_bodies[i].CollidesWithWorldEdge(out var edges))
-            {
-                BodyCollidedWithWall?.Invoke(this, _bodies[i]);
-                _bodies[i].ResolveWallCollision(edges);
-            }
-
-            for (var j = 0; j < _bodies.Count; j++)
-            {
-                if (j == i) continue;
-
-                if (_bodies[i].CollidesWith(_bodies[j], out var depth)) 
-                    _bodies[i].ResolveBodyCollision(_bodies[j], depth);
-            }
-        }
+            _bodies[i].Move(delta * TimeScale);
+        });
     }
 
     public Body CreateBody(Action<Body> init)

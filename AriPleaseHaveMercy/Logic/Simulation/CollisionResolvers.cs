@@ -2,7 +2,7 @@
 
 using System.Numerics;
 
-public delegate void WallCollisionResolver(Body a, WorldEdge edge);
+public delegate void WallCollisionResolver(Body a, Vector2 collisionPoint, WorldEdge edge);
 public delegate void BodyCollisionResolver(Body a, Body b, Vector2 collisionDepth); 
 
 public partial class CollisionResolvers
@@ -19,7 +19,5 @@ public partial class CollisionResolvers
         
         a.Velocity += b.Mass * unit;
         b.Velocity -= a.Mass * unit;
-        
-
     }
 }

@@ -24,7 +24,7 @@ public partial class CollisionResolvers
         b.Velocity -= unit * (a.Mass / b.World.BounceDamping);
     }
     
-    public static void DefaultWallBounceResponse(Body body, WorldEdge edges)
+    public static void DefaultWallBounceResponse(Body body, Vector2 collisionPoint, WorldEdge edges)
     {
         var world = body.World;
         

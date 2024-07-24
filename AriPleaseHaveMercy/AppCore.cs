@@ -1,7 +1,6 @@
 ﻿namespace AriPleaseHaveMercy;
 
 using System.Numerics;
-using AriPleaseHaveMercy.Logic;
 using AriPleaseHaveMercy.Logic.Graphics;
 using AriPleaseHaveMercy.Logic.Instrumentation;
 using AriPleaseHaveMercy.Logic.Simulation;
@@ -21,6 +20,10 @@ public class AppCore() : Game(new(false, false, 8))
     private Blur _blur = null!;
     private RenderTarget _target = null!;
     private Effect _effect = null!;
+    private Texture _hitTex = null!;
+    
+    private List<HitVisual> _visualsToRemove = new();
+    private List<HitVisual> _hitVisuals = new();
 
     [ConsoleVariable("phy_tscale", Description = "Controls how fast the simulation unfolds.")]
     public float PhysicsTimeScale
@@ -57,17 +60,25 @@ public class AppCore() : Game(new(false, false, 8))
         set => _world!.Gravity = value;
     }
 
+    [ConsoleVariable("phy_collisions_enabled", Description = "Controls whether collision detection is enabled.")]
+    public bool PhysicsCollisionsEnabled
+    {
+        get => _world!.IsCollisionDetectionEnabled;
+        set => _world!.IsCollisionDetectionEnabled = value;
+    }
+
     [ConsoleVariable("gen_min_mass", Description = "Controls the minimum mass of randomly generated bodies.")]
     public float GeneratorMinimumMass { get; set; } = 100;
-    
-    [ConsoleVariable("gen_max_mass", Description = "Controls the minimum mass of randomly generated bodies.")]
-    public float GeneratorMaximumMass { get; set; } = 1000;
 
-    [ConsoleVariable("gen_radius_factor", Description = "Controls the mass-based radius scaling factor for randomly generated bodies.")]
-    public float GeneratorRadiusScaleFactor { get; set; } = 0.002f;
+    [ConsoleVariable("gen_max_mass", Description = "Controls the minimum mass of randomly generated bodies.")]
+    public float GeneratorMaximumMass { get; set; } = 500;
+
+    [ConsoleVariable("gen_radius_factor",
+        Description = "Controls the mass-based radius scaling factor for randomly generated bodies.")]
+    public float GeneratorRadiusScaleFactor { get; set; } = 0.028f /*0.0184f*/;
 
     [ConsoleVariable("gen_body_count", Description = "Controls how many bodies to generate on simulation reset.")]
-    public int GeneratorBodyCount { get; set; } = 100;
+    public int GeneratorBodyCount { get; set; } = 96;
 
     [ConsoleVariable("gfx_bloom_iterations", Description = "Controls intensity of bloom effect.")]
     public int GraphicsBloomIterations
@@ -76,12 +87,15 @@ public class AppCore() : Game(new(false, false, 8))
         set => _blur.Iterations = value;
     }
 
+    [ConsoleVariable("gfx_hit_indicators_enabled", Description = "Controls colorful hit indicators.")]
+    public bool GraphicsHitIndicatorsEnabled { get; set; } = true;
+
     protected override void Initialize(IContentProvider content)
     {
         RenderSettings.MultiSamplingEnabled = true;
         RenderSettings.ShapeBlendingEnabled = true;
 
-        Window.Mode.SetWindowed(1200, 800, true);
+        Window.Mode.SetWindowed(1600, 800, true);
         _console = new MyDebugConsole(Window);
         _console.Theme.BackgroundColor = Color.HotPink with { A = 25 };
         _console.Theme.BorderColor = Color.Magenta;
@@ -90,13 +104,12 @@ public class AppCore() : Game(new(false, false, 8))
 
         _target = new RenderTarget(Window.Size);
         _effect = content.Load<Effect>("shaders/gauss.glsl");
+        _hitTex = content.Load<Texture>("gfx/hit.png");
         _blur = new Blur(_effect)
         {
             SourceTexture = _target,
-            Iterations = 8
+            Iterations = 5
         };
-
-        FixedTimeStepTarget = 165;
 
         _world = new World(Window.Size);
         _world.BodyCollidedWithWall += World_BodyCollidedWithWall;
@@ -106,10 +119,32 @@ public class AppCore() : Game(new(false, false, 8))
     }
 
     protected override void Update(float delta)
-        => _console?.Update(delta);
+    {
+        _console?.Update(delta);
+        _world?.Update(delta);
 
-    protected override void FixedUpdate(float delta)
-        => _world?.FixedUpdate(delta);
+        if (GraphicsHitIndicatorsEnabled)
+        {
+            var count = _hitVisuals.Count;
+            var state = Parallel.For(0, count, i =>
+            {
+                _hitVisuals[i].Update(delta);
+
+                if (_hitVisuals[i].TTL <= 0)
+                    _visualsToRemove.Add(_hitVisuals[i]);
+            });
+
+            if (state.IsCompleted)
+            {
+                for (var i = 0; i < _visualsToRemove.Count; i++)
+                {
+                    _hitVisuals.Remove(_visualsToRemove[i]);
+                }
+                _visualsToRemove.Clear();
+            }
+
+        }
+    }
 
     protected override void Draw(RenderContext context)
     {
@@ -118,13 +153,22 @@ public class AppCore() : Game(new(false, false, 8))
             (c, _) =>
             {
                 c.Clear(Color.Transparent);
+
+                if (GraphicsHitIndicatorsEnabled)
+                {
+                    for (var i = 0; i < _hitVisuals.Count; i++)
+                    {
+                        _hitVisuals[i].Draw(context);
+                    }
+                }
+
                 _world?.Draw(c);
             }
         );
 
         _blur.Render(context);
-        context.DrawTexture(_target, Vector2.Zero);
 
+        context.DrawTexture(_target, Vector2.Zero);
         _console?.Draw(context);
     }
 
@@ -169,14 +213,14 @@ public class AppCore() : Game(new(false, false, 8))
         SpawnBodies();
     }
 
-    private void World_BodyCollidedWithWall(object? sender, Body e)
+    private void World_BodyCollidedWithWall(object? sender, WallCollisionEventArgs e)
     {
-        e.Color = new Color(
-            (byte)Random.Shared.Next(0, 255),
-            (byte)Random.Shared.Next(0, 255),
-            (byte)Random.Shared.Next(0, 255),
-            (byte)100
-        );
+        if (GraphicsHitIndicatorsEnabled)
+        {
+            var visual = new HitVisual(HitVisual.MaxTTL, _hitTex, e.CollisionPoint, e.Edge, e.Penetration,
+                e.Body.Color);
+            _hitVisuals.Add(visual);
+        }
     }
 
     private void Console_ConsoleVariableChanged(object? sender, ConsoleVariableEventArgs e)
